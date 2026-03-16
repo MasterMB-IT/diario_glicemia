@@ -5,11 +5,10 @@ import os
 from datetime import datetime, timedelta
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Glicemia Pro Italia", layout="wide", page_icon="🩸")
+st.set_page_config(page_title="Glicemia Pro Italia v7", layout="wide", page_icon="🩸")
 
-# --- GESTIONE DATABASE PERSONALE ---
-# Usiamo un nome database solido
-DB_FILE = 'diario_glicemico_v6.db'
+# --- DATABASE PERSONALE (Nuova versione per evitare dati corrotti) ---
+DB_FILE = 'diario_glicemico_v7.db'
 
 def get_db():
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
@@ -27,21 +26,22 @@ conn.commit()
 @st.cache_data
 def load_data():
     if os.path.exists("database_cibi.csv"):
-        df = pd.read_csv("database_cibi.csv")
+        # Leggiamo forzando i tipi di dato per evitare errori
+        df = pd.read_csv("database_cibi.csv", dtype={'ig': int, 'carbo': float, 'kcal': float})
         return df.sort_values(by="cibo")
     return pd.DataFrame(columns=["cibo", "kcal", "carbo", "ig"])
 
 food_db = load_data()
 
-# --- UTENTE ---
+# --- LOGIN UTENTE ---
 c.execute("SELECT * FROM utenti LIMIT 1")
 user = c.fetchone()
 
 if not user:
     st.title("🩸 Benvenuto")
-    with st.form("set"):
-        n = st.text_input("Il tuo nome")
-        if st.form_submit_button("Inizia"):
+    with st.form("set_user"):
+        n = st.text_input("Inserisci il tuo nome")
+        if st.form_submit_button("Configura App"):
             c.execute("INSERT INTO utenti VALUES (?,?,?)", (n, 70, 140))
             conn.commit()
             st.rerun()
@@ -49,76 +49,71 @@ if not user:
 
 # --- INTERFACCIA ---
 st.title(f"🩸 Diario di {user[0]}")
+t1, t2 = st.tabs(["➕ Nuova Registrazione", "📊 Storico e Griglia"])
 
-tab_add, tab_view = st.tabs(["➕ Nuova Misurazione", "📊 Storico e Analisi"])
-
-with tab_add:
-    st.subheader("Cerca Alimento Semplice")
-    # Selezione cibo
-    scelta_cibo = st.selectbox("Cosa hai mangiato?", [""] + food_db['cibo'].tolist(), format_func=lambda x: 'Seleziona...' if x=='' else x)
+with t1:
+    # Ricerca alimento nel CSV
+    cibo_scelto = st.selectbox("Cerca alimento:", [""] + food_db['cibo'].tolist())
     
-    dati = {"kcal":0, "carbo":0, "ig":0}
-    if scelta_cibo:
-        r = food_db[food_db['cibo'] == scelta_cibo].iloc[0]
-        dati = {"kcal": r['kcal'], "carbo": r['carbo'], "ig": r['ig']}
-        st.info(f"✨ {scelta_cibo} (IG: {dati['ig']})")
+    dati_cibo = {"kcal": 0, "carbo": 0, "ig": 0}
+    if cibo_scelto:
+        row = food_db[food_db['cibo'] == cibo_scelto].iloc[0]
+        # Forziamo la conversione per sicurezza
+        dati_cibo = {
+            "kcal": float(row['kcal']),
+            "carbo": float(row['carbo']),
+            "ig": int(row['ig'])
+        }
+        st.success(f"✅ Selezionato: {cibo_scelto} | IG: {dati_cibo['ig']}")
 
-    st.divider()
-
-    with st.form("log_form"):
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            val_glicemia = st.number_input("Glicemia (mg/dL)", 20, 500, 100)
-            val_grammi = st.number_input("Quantità (grammi)", 0, 1000, 100)
-        
-        with col2:
-            # Orari pre-impostati su ora attuale
-            t_pasto = st.time_input("Ora del Pasto", (datetime.now() - timedelta(hours=1)).time())
-            t_glicemia = st.time_input("Ora Misurazione", datetime.now().time())
-            
-        with col3:
-            nome_cibo = st.text_input("Etichetta", value=scelta_cibo)
-            data_corrente = st.date_input("Data", datetime.now().date())
+    with st.form("form_inserimento"):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            glic = st.number_input("Glicemia (mg/dL)", 20, 500, 100)
+            gr = st.number_input("Grammi consumati", 1, 1000, 100)
+        with c2:
+            ora_p = st.time_input("Ora del Pasto", (datetime.now() - timedelta(minutes=60)).time())
+            ora_g = st.time_input("Ora Misurazione", datetime.now().time())
+        with c3:
+            data_p = st.date_input("Data", datetime.now().date())
+            nome_display = st.text_input("Nome nel diario", value=cibo_scelto)
 
         if st.form_submit_button("💾 Salva nel Diario"):
-            # Calcoli
-            c_effettivi = (dati['carbo'] * val_grammi) / 100
-            cg_effettivo = (c_effettivi * dati['ig']) / 100
+            # Calcolo Carico Glicemico e Delta
+            carb_t = (dati_cibo['carbo'] * gr) / 100
+            cg_t = (carb_t * dati_cibo['ig']) / 100
             
-            dt_p = datetime.combine(data_corrente, t_pasto)
-            dt_g = datetime.combine(data_corrente, t_glicemia)
-            delta_m = int((dt_g - dt_p).total_seconds() / 60)
+            dt_p = datetime.combine(data_p, ora_p)
+            dt_g = datetime.combine(data_p, ora_g)
+            diff_min = int((dt_g - dt_p).total_seconds() / 60)
             
-            c.execute("INSERT INTO diario VALUES (?,?,?,?,?,?,?,?,?,?)", 
-                      (data_corrente.strftime("%Y-%m-%d"), t_pasto.strftime("%H:%M"), 
-                       t_glicemia.strftime("%H:%M"), delta_m, val_glicemia, nome_cibo, 
-                       val_grammi, round(c_effettivi, 1), dati['ig'], round(cg_effettivo, 1)))
+            # Salvataggio con tipi di dato espliciti
+            c.execute("INSERT INTO diario (data, ora_pasto, ora_glicemia, delta, glicemia, cibo, grammi, carbo_tot, ig, cg) VALUES (?,?,?,?,?,?,?,?,?,?)", 
+                      (data_p.strftime("%Y-%m-%d"), ora_p.strftime("%H:%M"), 
+                       ora_g.strftime("%H:%M"), int(diff_min), int(glic), str(nome_display), 
+                       float(gr), float(carb_t), int(dati_cibo['ig']), float(cg_t)))
             conn.commit()
-            st.success(f"Registrato! CG: {round(cg_effettivo, 1)}")
+            st.success("Dato registrato correttamente!")
             st.rerun()
 
-with tab_view:
-    df_raw = pd.read_sql_query("SELECT * FROM diario ORDER BY data DESC, ora_glicemia DESC", conn)
+with t2:
+    df_sql = pd.read_sql_query("SELECT * FROM diario ORDER BY data DESC, ora_glicemia DESC", conn)
     
-    if not df_raw.empty:
-        # Mini statistiche
-        avg_glic = df_raw['glicemia'].mean()
-        st.write(f"📊 Glicemia Media: **{avg_glic:.0f} mg/dL**")
+    if not df_sql.empty:
+        # Pulizia forzata per la visualizzazione (rimuove i b'\x00')
+        df_sql['ig'] = pd.to_numeric(df_sql['ig'], errors='coerce').fillna(0).astype(int)
+        df_sql['cg'] = pd.to_numeric(df_sql['cg'], errors='coerce').fillna(0).round(1)
         
-        # Griglia con colori
-        def color_glic(val):
-            color = 'red' if val > user[2] else 'green' if val >= user[1] else 'orange'
-            return f'color: {color}; font-weight: bold'
+        st.subheader("📋 Registro Pasti")
+        st.dataframe(df_sql, use_container_width=True)
+        
+        # Grafico semplice
+        fig = px.scatter(df_sql, x="delta", y="glicemia", color="cg", size="cg",
+                         labels={"delta": "Minuti dal pasto", "glicemia": "Glicemia"},
+                         title="Andamento Glicemico vs Carico Glicemico")
+        st.plotly_chart(fig, use_container_width=True)
 
-        st.dataframe(df_raw.style.applymap(color_glic, subset=['glicemia']), use_container_width=True)
-        
-        # Download
-        st.download_button("📥 Scarica in Excel/CSV", df_raw.to_csv(index=False), "diario_glicemia.csv")
-        
-        if st.button("🗑️ Svuota Tutto"):
+        if st.button("🗑️ Cancella tutto il diario"):
             c.execute("DELETE FROM diario")
             conn.commit()
             st.rerun()
-    else:
-        st.info("Il diario è vuoto.")
