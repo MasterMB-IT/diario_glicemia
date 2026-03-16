@@ -12,13 +12,13 @@ st.set_page_config(page_title="Glicemia Pro Cloud", layout="wide", page_icon="�
 conn = sqlite3.connect('diario_glicemia.db', check_same_thread=False)
 c = conn.cursor()
 
-# Creazione tabelle (Se esistono già, le lasciamo stare, ma aggiungiamo le colonne se mancano)
+# Inizializzazione Tabelle
 c.execute('''CREATE TABLE IF NOT EXISTS utenti 
              (nome TEXT, peso REAL, altezza REAL, tipo_diabete TEXT, target_min INTEGER, target_max INTEGER)''')
 c.execute('''CREATE TABLE IF NOT EXISTS voci_diario 
              (data TEXT, glicemia INTEGER, cibo TEXT, grammi REAL, kcal REAL, carbo REAL, note TEXT)''')
 
-# FIX PER L'ERRORE DI INDICE: Se la tabella utenti è vecchia, la resettiamo
+# Fix Struttura Database (se necessario)
 c.execute("PRAGMA table_info(utenti)")
 colonne = [info[1] for info in c.fetchall()]
 if "target_min" not in colonne:
@@ -27,20 +27,27 @@ if "target_min" not in colonne:
                  (nome TEXT, peso REAL, altezza REAL, tipo_diabete TEXT, target_min INTEGER, target_max INTEGER)''')
 conn.commit()
 
-# --- FUNZIONI DI SUPPORTO ---
+# --- FUNZIONE API FOOD (Migliorata) ---
 def get_food_data(nome_cibo):
-    url = f"https://it.openfoodfacts.org/cgi/search.pl?search_terms={nome_cibo}&search_simple=1&action=process&json=1"
+    # User-Agent necessario per evitare blocchi dalle API di Open Food Facts
+    headers = {'User-Agent': 'GlicemiaApp - WebApp - Version 1.1'}
+    url = f"https://it.openfoodfacts.org/cgi/search.pl?search_terms={nome_cibo}&search_simple=1&action=process&json=1&page_size=10"
+    
     try:
-        r = requests.get(url, timeout=5).json()
-        if r.get('products') and len(r['products']) > 0:
-            p = r['products'][0]
-            nutr = p.get('nutriments', {})
-            return {
-                "nome": p.get('product_name', nome_cibo),
-                "kcal": nutr.get('energy-kcal_100g', 0),
-                "carbo": nutr.get('carbohydrates_100g', 0)
-            }
-    except: return None
+        r = requests.get(url, headers=headers, timeout=10).json()
+        if r.get('products'):
+            # Cerchiamo il primo prodotto che abbia i dati nutrizionali essenziali
+            for p in r['products']:
+                nutr = p.get('nutriments', {})
+                # Verifichiamo che esistano i carboidrati (essenziali per la glicemia)
+                if 'carbohydrates_100g' in nutr:
+                    return {
+                        "nome": p.get('product_name_it') or p.get('product_name') or nome_cibo,
+                        "kcal": nutr.get('energy-kcal_100g', 0),
+                        "carbo": nutr.get('carbohydrates_100g', 0)
+                    }
+    except Exception:
+        return None
     return None
 
 # --- SIDEBAR: PROFILO UTENTE ---
@@ -48,7 +55,7 @@ st.sidebar.title("👤 Profilo Utente")
 c.execute("SELECT * FROM utenti LIMIT 1")
 user_data = c.fetchone()
 
-# Gestione valori di default per evitare IndexError
+# Valori di default
 d_nome = user_data[0] if user_data else "Utente"
 d_peso = user_data[1] if user_data else 70.0
 d_alt = user_data[2] if user_data else 170.0
@@ -69,57 +76,101 @@ with st.sidebar.form("profilo_form"):
         c.execute("DELETE FROM utenti")
         c.execute("INSERT INTO utenti VALUES (?,?,?,?,?,?)", (n, p, a, t, t_min, t_max))
         conn.commit()
-        st.sidebar.success("Profilo aggiornato! Ricarica la pagina.")
+        st.sidebar.success("Profilo salvato!")
         st.rerun()
 
 # --- CORPO PRINCIPALE ---
 st.title("🩸 Glicemia & Nutrizione Smart")
 
-tab1, tab2, tab3 = st.tabs(["➕ Nuovo Inserimento", "📊 Grafici", "📜 Storico Dati"])
+tab1, tab2, tab3 = st.tabs(["➕ Nuovo Inserimento", "📊 Analisi Grafiche", "📜 Diario Storico"])
 
+# --- TAB 1: INSERIMENTO ---
 with tab1:
-    with st.form("entry_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            glic = st.number_input("Glicemia rilevata (mg/dL)", 20, 500, 100)
-            cibo = st.text_input("Cibo consumato")
-            grammi = st.number_input("Grammi (g)", 0, 2000, 100)
-        with col2:
-            data_custom = st.text_input("Ora (HH:MM) - Vuoto per ora attuale", "")
-            note = st.text_area("Note")
+    st.subheader("Registra Valori")
+    
+    # 1. Ricerca Cibo (FUORI dal form per essere interattiva)
+    cibo_query = st.text_input("🔍 Cerca cibo mangiato (es: 'Pane integrale')", help="Premi invio per cercare")
+    
+    info_temp = None
+    if cibo_query:
+        with st.spinner('Ricerca dati nutrizionali...'):
+            info_temp = get_food_data(cibo_query)
         
-        if st.form_submit_button("Registra nel Diario"):
-            ora_ins = datetime.now().strftime("%Y-%m-%d ") + data_custom if data_custom else datetime.now().strftime("%Y-%m-%d %H:%M")
-            food_info = get_food_data(cibo) if cibo else None
-            
-            nome_f = food_info['nome'] if food_info else (cibo if cibo else "Nessun pasto")
-            k_tot = (food_info['kcal'] * grammi / 100) if food_info else 0.0
-            c_tot = (food_info['carbo'] * grammi / 100) if food_info else 0.0
-            
-            c.execute("INSERT INTO voci_diario VALUES (?,?,?,?,?,?,?)", (ora_ins, glic, nome_f, grammi, k_tot, c_tot, note))
-            conn.commit()
-            st.success("Dati salvati!")
+        if info_temp:
+            st.success(f"✅ Prodotto trovato: **{info_temp['nome']}**")
+            st.info(f"Valori per 100g: {info_temp['kcal']} kcal | {info_temp['carbo']}g Carboidrati")
+        else:
+            st.warning("⚠️ Cibo non trovato nel database. Inserimento manuale attivo.")
 
+    st.divider()
+
+    # 2. Form di Salvataggio
+    with st.form("main_entry_form"):
+        col_dx, col_sx = st.columns(2)
+        
+        with col_dx:
+            glic_val = st.number_input("Glicemia attuale (mg/dL)", 20, 500, 100)
+            grammi_val = st.number_input("Grammi consumati (g)", 1, 2000, 100)
+        
+        with col_sx:
+            # Pre-compila con il nome trovato dall'API o con quello scritto dall'utente
+            nome_confermato = st.text_input("Conferma nome alimento", value=info_temp['nome'] if info_temp else cibo_query)
+            ora_custom = st.text_input("Ora (HH:MM) - Lascia vuoto per ora attuale", "")
+            
+        nota_val = st.text_area("Note (es: 30min post-pasto, dopo corsa, ecc.)")
+        
+        if st.form_submit_button("💾 Salva nel Diario"):
+            # Gestione timestamp
+            data_str = datetime.now().strftime("%Y-%m-%d ") + ora_custom if ora_custom else datetime.now().strftime("%Y-%m-%d %H:%M")
+            
+            # Calcolo macronutrienti
+            k_100 = info_temp['kcal'] if info_temp else 0
+            c_100 = info_temp['carbo'] if info_temp else 0
+            
+            kcal_tot = (k_100 * grammi_val) / 100
+            carbo_tot = (c_100 * grammi_val) / 100
+            
+            c.execute("INSERT INTO voci_diario VALUES (?,?,?,?,?,?,?)", 
+                      (data_str, glic_val, nome_confermato, grammi_val, kcal_tot, carbo_tot, nota_val))
+            conn.commit()
+            st.balloons()
+            st.success(f"Dati registrati correttamente per {nome_confermato}!")
+
+# --- TAB 2: GRAFICI ---
 with tab2:
     df = pd.read_sql_query("SELECT * FROM voci_diario ORDER BY data ASC", conn)
     if not df.empty:
-        fig = px.line(df, x="data", y="glicemia", title="Andamento Glicemico", markers=True)
-        fig.add_hline(y=d_max, line_dash="dash", line_color="red")
-        fig.add_hline(y=d_min, line_dash="dash", line_color="green")
+        # Grafico Linee
+        fig = px.line(df, x="data", y="glicemia", title="Andamento dei livelli di glucosio", markers=True)
+        fig.add_hline(y=d_max, line_dash="dash", line_color="red", annotation_text="Target Max")
+        fig.add_hline(y=d_min, line_dash="dash", line_color="green", annotation_text="Target Min")
         st.plotly_chart(fig, use_container_width=True)
         
-        c1, c2 = st.columns(2)
-        oggi = datetime.now().strftime("%Y-%m-%d")
-        df_oggi = df[df['data'].str.contains(oggi)]
-        c1.metric("Calorie Oggi", f"{df_oggi['kcal'].sum():.0f} kcal")
-        c2.metric("Carbo Oggi", f"{df_oggi['carbo'].sum():.1f} g")
+        # Statistiche Oggi
+        st.divider()
+        c1, c2, c3 = st.columns(3)
+        oggi_str = datetime.now().strftime("%Y-%m-%d")
+        df_oggi = df[df['data'].str.contains(oggi_str)]
+        
+        c1.metric("Pasti Registrati oggi", len(df_oggi))
+        c2.metric("Calorie Totali", f"{df_oggi['kcal'].sum():.0f} kcal")
+        c3.metric("Carboidrati Totali", f"{df_oggi['carbo'].sum():.1f} g")
     else:
-        st.info("Nessun dato presente.")
+        st.info("Aggiungi la tua prima misurazione per vedere le statistiche.")
 
+# --- TAB 3: STORICO ---
 with tab3:
-    df_view = pd.read_sql_query("SELECT * FROM voci_diario ORDER BY data DESC", conn)
-    st.dataframe(df_view, use_container_width=True)
-    if st.button("Svuota Diario"):
-        c.execute("DELETE FROM voci_diario")
-        conn.commit()
-        st.rerun()
+    df_history = pd.read_sql_query("SELECT * FROM voci_diario ORDER BY data DESC", conn)
+    if not df_history.empty:
+        st.dataframe(df_history, use_container_width=True)
+        
+        # Esportazione CSV (extra "accattivante")
+        csv = df_history.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Scarica Diario (CSV)", data=csv, file_name="diario_glicemia.csv", mime="text/csv")
+        
+        if st.button("🗑️ Cancella tutto lo storico"):
+            c.execute("DELETE FROM voci_diario")
+            conn.commit()
+            st.rerun()
+    else:
+        st.write("Nessun dato salvato.")
