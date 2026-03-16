@@ -54,7 +54,7 @@ if st.session_state['utente'] is None:
             nuovo_u = st.text_input("Nuovo Username:").strip().lower()
             admin_p = st.text_input("Password Admin:", type="password")
             if st.button("Autorizza"):
-                if admin_p == "admin123": # <--- CAMBIA QUESTA PASSWORD
+                if admin_p == "Mirkof87": # <--- CAMBIA QUESTA PASSWORD
                     try:
                         cursor.execute("INSERT INTO utenti_autorizzati VALUES (?)", (nuovo_u,))
                         conn.commit()
