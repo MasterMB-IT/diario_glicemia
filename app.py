@@ -6,118 +6,177 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Glicemia Multi-User", layout="wide", page_icon="👥")
+# --- CONFIGURAZIONE PAGINA ---
+st.set_page_config(page_title="Glicemia Pro Multi-User v11", layout="wide", page_icon="🩸")
 
-# --- DATABASE (V10 - Supporto Multi-utente) ---
-DB_FILE = 'diario_v10.db'
-conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-c = conn.cursor()
-# Aggiungiamo la colonna 'utente_id' a tutte le tabelle
-c.execute('''CREATE TABLE IF NOT EXISTS diario 
-             (utente_id TEXT, data TEXT, ora_pasto TEXT, ora_glic_post TEXT, 
-              glic_pre INTEGER, glic_post INTEGER, delta INTEGER,
-              cibo TEXT, grammi REAL, kcal REAL, carbo REAL, prot REAL, grassi REAL, ig INTEGER, cg REAL)''')
-conn.commit()
+# --- GESTIONE DATABASE SQLITE ---
+DB_FILE = 'diario_v11.db'
 
-# --- LOGIN SEMPLIFICATO ---
+def init_db():
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    c = conn.cursor()
+    # Tabella Diario: aggiunta colonna utente_id e macronutrienti
+    c.execute('''CREATE TABLE IF NOT EXISTS diario 
+                 (utente_id TEXT, data TEXT, ora_pasto TEXT, ora_glic_post TEXT, 
+                  glic_pre INTEGER, glic_post INTEGER, delta INTEGER,
+                  cibo TEXT, grammi REAL, kcal REAL, carbo REAL, prot REAL, grassi REAL, ig INTEGER, cg REAL)''')
+    # Tabella Utenti Autorizzati
+    c.execute('CREATE TABLE IF NOT EXISTS utenti_autorizzati (username TEXT PRIMARY KEY)')
+    conn.commit()
+    return conn
+
+conn = init_db()
+cursor = conn.cursor()
+
+# --- LOGICA DI ACCESSO (LOGIN) ---
 if 'utente' not in st.session_state:
     st.session_state['utente'] = None
 
 if st.session_state['utente'] is None:
-    st.title("🔐 Accesso Personale")
-    user_input = st.text_input("Inserisci il tuo nome o un codice (es: Marco82):", placeholder="Questo separerà i tuoi dati dagli altri")
-    if st.button("Entra nel mio Diario"):
-        if user_input:
-            st.session_state['utente'] = user_input.strip().lower()
-            st.rerun()
-        else:
-            st.warning("Inserisci un nome per continuare.")
+    st.title("🔐 Accesso al Diario Glicemico")
+    st.info("Inserisci il tuo username per caricare i tuoi dati personali.")
+    
+    user_input = st.text_input("Username:").strip().lower()
+    
+    col_login, col_reg = st.columns(2)
+    
+    with col_login:
+        if st.button("Accedi"):
+            cursor.execute("SELECT username FROM utenti_autorizzati WHERE username = ?", (user_input,))
+            if cursor.fetchone():
+                st.session_state['utente'] = user_input
+                st.rerun()
+            else:
+                st.error("❌ Username non autorizzato.")
+                
+    with col_reg:
+        with st.expander("Registra nuovo profilo (Admin)"):
+            nuovo_u = st.text_input("Nuovo Username:").strip().lower()
+            admin_p = st.text_input("Password Admin:", type="password")
+            if st.button("Autorizza"):
+                if admin_p == "admin123": # <--- CAMBIA QUESTA PASSWORD
+                    try:
+                        cursor.execute("INSERT INTO utenti_autorizzati VALUES (?)", (nuovo_u,))
+                        conn.commit()
+                        st.success(f"Utente {nuovo_u} creato!")
+                    except:
+                        st.warning("Esiste già.")
+                else:
+                    st.error("Password errata.")
     st.stop()
 
-# Se arriviamo qui, l'utente è loggato nella sessione
 ID_UTENTE = st.session_state['utente']
 
-# --- LOGOUT ---
-with st.sidebar:
-    st.write(f"👤 Utente: **{ID_UTENTE.capitalize()}**")
-    if st.button("Cambia Utente / Esci"):
-        st.session_state['utente'] = None
-        st.rerun()
-
-# --- CARICAMENTO ALIMENTI ---
+# --- CARICAMENTO DATABASE ALIMENTI (CSV) ---
 @st.cache_data
-def load_food_db():
+def load_food():
     if os.path.exists("database_cibi.csv"):
-        return pd.read_csv("database_cibi.csv")
+        df = pd.read_csv("database_cibi.csv")
+        # Pulizia nomi colonne e dati
+        df.columns = df.columns.str.strip()
+        return df
     return pd.DataFrame(columns=["cibo","kcal","carbo","proteine","grassi","ig"])
 
-food_db = load_food_db()
+food_db = load_food()
 
-# --- APP PRINCIPALE ---
-st.title(f"📊 Diario Glicemico di {ID_UTENTE.capitalize()}")
-t1, t2 = st.tabs(["📝 Inserimento Pasto", "📈 Analisi Avanzata"])
+# --- INTERFACCIA PRINCIPALE ---
+with st.sidebar:
+    st.title(f"👤 {ID_UTENTE.upper()}")
+    if st.button("Log-out"):
+        st.session_state['utente'] = None
+        st.rerun()
+    st.divider()
+    st.write("App v11.0 - MultiUser & Macro")
+
+st.title("🩸 Monitoraggio Glicemia e Nutrizione")
+
+t1, t2 = st.tabs(["➕ Nuovo Inserimento", "📊 Analisi e Storico"])
 
 with t1:
-    cerca = st.selectbox("Cerca alimento:", [""] + food_db['cibo'].tolist())
+    # Selezione Alimento
+    cerca = st.selectbox("Seleziona alimento dal database:", [""] + food_db['cibo'].tolist())
     
-    f_data = {"kcal":0, "carbo":0, "prot":0, "grassi":0, "ig":0}
+    # Dati default se non selezionato
+    f = {"kcal":0, "carbo":0, "prot":0, "grassi":0, "ig":0}
     if cerca:
-        m = food_db[food_db['cibo'] == cerca].iloc[0]
-        f_data = {"kcal":float(m['kcal']), "carbo":float(m['carbo']), 
-                  "prot":float(m['proteine']), "grassi":float(m['grassi']), "ig":int(m['ig'])}
+        row = food_db[food_db['cibo'] == cerca].iloc[0]
+        f = {"kcal":float(row['kcal']), "carbo":float(row['carbo']), 
+             "prot":float(row['proteine']), "grassi":float(row['grassi']), "ig":int(row['ig'])}
 
-    with st.form("form_pasto"):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            g_pre = st.number_input("Prima del pasto (mg/dL)", 20, 500, 100)
-            g_post = st.number_input("Dopo il pasto (mg/dL)", 20, 500, 140)
-            gr = st.number_input("Grammi (g)", 1, 1000, 100)
-        with col2:
-            o_pasto = st.time_input("Ora Inizio Pasto", (datetime.now() - timedelta(minutes=90)).time())
-            o_glic = st.time_input("Ora Misurazione Post", datetime.now().time())
+    with st.form("pasto_form"):
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            st.subheader("💉 Glicemia")
+            g_pre = st.number_input("Pre-Pasto (mg/dL)", 20, 500, 100)
+            g_post = st.number_input("Post-Pasto (mg/dL)", 20, 500, 140)
+            grammi = st.number_input("Quantità (g)", 1, 1000, 100)
+            
+        with c2:
+            st.subheader("🕒 Orari")
+            o_pasto = st.time_input("Inizio Pasto", (datetime.now() - timedelta(minutes=90)).time())
+            o_glic = st.time_input("Misurazione Post", datetime.now().time())
             data_p = st.date_input("Data", datetime.now().date())
-        with col3:
-            kcal_live = (f_data['kcal'] * gr) / 100
-            carbo_live = (f_data['carbo'] * gr) / 100
-            st.metric("Calorie Totali", f"{kcal_live:.1f} kcal")
-            nome_display = st.text_input("Nome Alimento", value=cerca)
+            
+        with c3:
+            st.subheader("⚖️ Calcolo Real-Time")
+            kcal_t = (f['kcal'] * grammi) / 100
+            carb_t = (f['carbo'] * grammi) / 100
+            st.metric("Calorie Pasto", f"{kcal_t:.1f} kcal")
+            st.metric("Carboidrati", f"{carb_t:.1f} g")
+            nome_diario = st.text_input("Conferma nome cibo", value=cerca)
 
-        if st.form_submit_button("✅ Salva nel MIO Diario"):
-            p_t = (f_data['prot'] * gr) / 100
-            g_t = (f_data['grassi'] * gr) / 100
-            cg_t = (carbo_live * f_data['ig']) / 100
+        if st.form_submit_button("💾 SALVA NEL DIARIO"):
+            # Calcoli finali
+            prot_t = (f['prot'] * grammi) / 100
+            gras_t = (f['grassi'] * grammi) / 100
+            cg_t = (carb_t * f['ig']) / 100
             diff = int((datetime.combine(data_p, o_glic) - datetime.combine(data_p, o_pasto)).total_seconds() / 60)
             
-            # Salviamo con l'ID_UTENTE
-            c.execute("INSERT INTO diario VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", 
-                      (ID_UTENTE, data_p.strftime("%Y-%m-%d"), o_pasto.strftime("%H:%M"), o_glic.strftime("%H:%M"),
-                       g_pre, g_post, diff, nome_display, gr, kcal_live, carbo_live, p_t, g_t, f_data['ig'], cg_t))
+            cursor.execute("INSERT INTO diario VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", 
+                          (ID_UTENTE, data_p.strftime("%Y-%m-%d"), o_pasto.strftime("%H:%M"), o_glic.strftime("%H:%M"),
+                           g_pre, g_post, diff, nome_diario, grammi, kcal_t, carb_t, prot_t, gras_t, f['ig'], cg_t))
             conn.commit()
-            st.success(f"Pasto salvato per {ID_UTENTE}!")
+            st.success("Dati salvati correttamente!")
             st.rerun()
 
 with t2:
-    # FILTRIAMO LA QUERY PER L'UTENTE CORRENTE
+    # Query filtrata per utente
     df = pd.read_sql_query("SELECT * FROM diario WHERE utente_id = ? ORDER BY data DESC, ora_glic_post DESC", conn, params=(ID_UTENTE,))
     
     if not df.empty:
-        st.subheader("🥧 I tuoi Macronutrienti di oggi")
+        # Colonna Variazione
+        df['Variazione'] = df['glic_post'] - df['glic_pre']
+        
+        # Grafico Macro Odierno
+        st.subheader("🥧 Macronutrienti di Oggi")
         oggi = datetime.now().strftime("%Y-%m-%d")
         df_oggi = df[df['data'] == oggi]
         
         if not df_oggi.empty:
-            fig_macro = px.pie(names=['Carboidrati', 'Proteine', 'Grassi'], 
-                              values=[df_oggi['carbo'].sum(), df_oggi['prot'].sum(), df_oggi['grassi'].sum()])
-            st.plotly_chart(fig_macro, use_container_width=True)
+            c_m1, c_m2 = st.columns([1, 2])
+            with c_m1:
+                fig_pie = px.pie(names=['Carboidrati', 'Proteine', 'Grassi'], 
+                                values=[df_oggi['carbo'].sum(), df_oggi['prot'].sum(), df_oggi['grassi'].sum()],
+                                hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
+                st.plotly_chart(fig_pie, use_container_width=True)
+            with c_m2:
+                st.write(f"**Calorie totali oggi:** {df_oggi['kcal'].sum():.0f} kcal")
+                st.write(f"**Carboidrati totali:** {df_oggi['carbo'].sum():.1f} g")
         
-        st.subheader("📋 Il tuo registro")
-        df['Variazione'] = df['glic_post'] - df['glic_pre']
+        st.divider()
+        st.subheader("📋 Registro Storico")
         st.dataframe(df.drop(columns=['utente_id']), use_container_width=True)
         
-        if st.button("🗑️ Cancella solo i miei dati"):
-            c.execute("DELETE FROM diario WHERE utente_id = ?", (ID_UTENTE,))
+        # Grafico a dispersione
+        st.subheader("📈 Impatto Glicemico (Delta Tempo)")
+        fig_scat = px.scatter(df, x="delta", y="glic_post", size="cg", color="Variazione",
+                             hover_name="cibo", labels={"delta":"Minuti dal pasto", "glic_post":"Glicemia rilevata"})
+        st.plotly_chart(fig_scat, use_container_width=True)
+
+        if st.button("🗑️ Svuota il mio registro"):
+            cursor.execute("DELETE FROM diario WHERE utente_id = ?", (ID_UTENTE,))
             conn.commit()
             st.rerun()
     else:
-        st.info(f"Ciao {ID_UTENTE}, il tuo diario è ancora vuoto.")
+        st.info("Nessun dato presente. Inizia a registrare i tuoi pasti!")
