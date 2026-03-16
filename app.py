@@ -6,134 +6,113 @@ import os
 from datetime import datetime
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Glicemia Pro Post-Prandiale", layout="wide", page_icon="🩸")
+st.set_page_config(page_title="Glicemia Pro Elite", layout="wide", page_icon="🩸")
 
-# --- CARICAMENTO DATABASE CIBI ---
-@st.cache_data
-def carica_database_cibi():
-    file_path = "database_cibi.csv"
-    if os.path.exists(file_path):
-        df = pd.read_csv(file_path)
-        return df.sort_values(by="cibo")
-    return pd.DataFrame(columns=["cibo", "kcal", "carbo"])
+# --- PERSISTENZA DATI ---
+# Utilizziamo un percorso specifico per il DB per stabilizzarlo su Streamlit Cloud
+DB_FILE = 'diario_persistente_v1.db'
 
-db_cibi = carica_database_cibi()
+def get_connection():
+    return sqlite3.connect(DB_FILE, check_same_thread=False)
 
-# --- DATABASE SQLITE (Versione con Orari Separati) ---
-conn = sqlite3.connect('diario_v_orari.db', check_same_thread=False)
+conn = get_connection()
 c = conn.cursor()
 c.execute('CREATE TABLE IF NOT EXISTS utenti (nome TEXT, t_min INTEGER, t_max INTEGER)')
 c.execute('''CREATE TABLE IF NOT EXISTS diario 
              (data TEXT, ora_pasto TEXT, ora_glicemia TEXT, diff_minuti INTEGER, 
-              glicemia INTEGER, cibo TEXT, grammi REAL, kcal REAL, carbo REAL)''')
+              glicemia INTEGER, cibo TEXT, grammi REAL, kcal REAL, carbo REAL, ig INTEGER)''')
 conn.commit()
 
-# Controllo Utente
+# --- CARICAMENTO DATABASE CIBI ---
+@st.cache_data
+def carica_database_cibi():
+    if os.path.exists("database_cibi.csv"):
+        return pd.read_csv("database_cibi.csv").sort_values(by="cibo")
+    return pd.DataFrame(columns=["cibo", "kcal", "carbo", "ig"])
+
+db_cibi = carica_database_cibi()
+
+# --- SIDEBAR: PROFILO ---
 c.execute("SELECT * FROM utenti LIMIT 1")
 user = c.fetchone()
-if not user:
-    st.title("🩸 Configurazione Iniziale")
-    nome = st.text_input("Il tuo nome")
-    if st.button("Salva"):
-        c.execute("INSERT INTO utenti VALUES (?,?,?)", (nome, 70, 140))
-        conn.commit()
-        st.rerun()
-    st.stop()
 
-# --- INTERFACCIA ---
-st.title(f"🩸 Diario di {user[0]}")
-t1, t2 = st.tabs(["➕ Nuova Misurazione", "📊 Analisi e Storico"])
+with st.sidebar:
+    st.title("⚙️ Impostazioni")
+    if not user:
+        with st.form("setup"):
+            n = st.text_input("Nome")
+            if st.form_submit_button("Crea Profilo"):
+                c.execute("INSERT INTO utenti VALUES (?,?,?)", (n, 70, 140))
+                conn.commit()
+                st.rerun()
+    else:
+        st.write(f"Utente: **{user[0]}**")
+        if st.button("Esporta Dati (CSV)"):
+            df_export = pd.read_sql_query("SELECT * FROM diario", conn)
+            st.download_button("Scarica", df_export.to_csv(index=False), "diario.csv")
 
-with t1:
-    st.subheader("1. Seleziona Alimento")
-    search_query = st.selectbox(
-        "Cerca nel database locale:", 
-        options=[""] + db_cibi['cibo'].tolist()
-    )
+# --- APP PRINCIPALE ---
+st.title("🩸 Monitoraggio Avanzato Glicemia")
+
+tab_ins, tab_stat = st.tabs(["📝 Inserimento Dati", "📈 Analisi Professionale"])
+
+with tab_ins:
+    col_a, col_b = st.columns([2, 1])
     
-    dati_f = {"kcal": 0, "carbo": 0}
-    if search_query:
-        match = db_cibi[db_cibi['cibo'] == search_query].iloc[0]
-        dati_f = {"kcal": match['kcal'], "carbo": match['carbo']}
-        st.info(f"💡 {search_query}: {match['kcal']} kcal | {match['carbo']}g carbo per 100g")
-
-    st.divider()
-    st.subheader("2. Dettagli Misurazione")
-    
-    with st.form("form_avanzato"):
-        col1, col2, col3 = st.columns(3)
+    with col_a:
+        scelta = st.selectbox("Seleziona Alimento:", [""] + db_cibi['cibo'].tolist())
         
-        with col1:
-            glic = st.number_input("Glicemia (mg/dL)", 20, 500, 100)
-            grammi = st.number_input("Grammi cibo (g)", 1, 1000, 100)
-        
-        with col2:
-            # Qui separiamo i due orari
-            ora_pasto = st.time_input("Ora del Pasto", datetime.now().time())
-            ora_glicemia = st.time_input("Ora della Glicemia", datetime.now().time())
-        
-        with col3:
-            nome_c = st.text_input("Nome Alimento", value=search_query)
-            data_evento = st.date_input("Data", datetime.now().date())
-
-        if st.form_submit_button("💾 Salva nel Diario"):
-            # Calcolo della differenza di tempo
-            dt_pasto = datetime.combine(data_evento, ora_pasto)
-            dt_glicemia = datetime.combine(data_evento, ora_glicemia)
-            diff = dt_glicemia - dt_pasto
-            diff_minuti = int(diff.total_seconds() / 60)
+        info = {"kcal": 0, "carbo": 0, "ig": 0}
+        if scelta:
+            match = db_cibi[db_cibi['cibo'] == scelta].iloc[0]
+            info = {"kcal": match['kcal'], "carbo": match['carbo'], "ig": match['ig']}
             
-            # Calcolo Nutrienti
-            k_tot = (dati_f['kcal'] * grammi) / 100
-            c_tot = (dati_f['carbo'] * grammi) / 100
+            # Calcolo Carico Glicemico (CG) teorico su 100g
+            cg = (info['carbo'] * info['ig']) / 100
+            st.info(f"🧬 **IG: {info['ig']}** | Carico Glicemico (100g): {cg:.1f}")
+
+    with st.form("registro_completo"):
+        c1, c2, c3 = st.columns(3)
+        glic = c1.number_input("Glicemia (mg/dL)", 20, 500, 100)
+        grammi = c1.number_input("Quantità (g)", 1, 1000, 100)
+        
+        o_pasto = c2.time_input("Ora Pasto", datetime.now().time())
+        o_glic = c2.time_input("Ora Misurazione", datetime.now().time())
+        
+        data_ev = c3.date_input("Data", datetime.now().date())
+        nome_c = c3.text_input("Etichetta Cibo", value=scelta)
+        
+        if st.form_submit_button("💾 Salva nel Database"):
+            # Calcolo Delta Tempo
+            dt_p = datetime.combine(data_ev, o_pasto)
+            dt_g = datetime.combine(data_ev, o_glic)
+            delta = int((dt_g - dt_p).total_seconds() / 60)
             
-            c.execute('''INSERT INTO diario VALUES (?,?,?,?,?,?,?,?,?)''', 
-                      (data_evento.strftime("%Y-%m-%d"), 
-                       ora_pasto.strftime("%H:%M"), 
-                       ora_glicemia.strftime("%H:%M"), 
-                       diff_minuti, glic, nome_c, grammi, k_tot, c_tot))
+            # Calcolo Valori
+            kcal_t = (info['kcal'] * grammi) / 100
+            carb_t = (info['carbo'] * grammi) / 100
+            
+            c.execute("INSERT INTO diario VALUES (?,?,?,?,?,?,?,?,?,?)", 
+                      (data_ev.strftime("%Y-%m-%d"), o_pasto.strftime("%H:%M"), 
+                       o_glic.strftime("%H:%M"), delta, glic, nome_c, grammi, kcal_t, carb_t, info['ig']))
             conn.commit()
-            st.success(f"Registrato! Differenza: {diff_minuti} minuti dal pasto.")
+            st.success("Dati salvati in memoria permanente!")
             st.rerun()
 
-with t2:
+with tab_stat:
     df = pd.read_sql_query("SELECT * FROM diario ORDER BY data DESC, ora_glicemia DESC", conn)
     
     if not df.empty:
-        # Funzione per colorare la differenza di tempo
-        def format_diff(val):
-            return f"{val} min"
-
-        st.subheader("📜 Griglia Storica")
-        
-        # Rinominiamo le colonne per renderle più leggibili in tabella
-        df_view = df.rename(columns={
-            'ora_pasto': '🕒 Ora Pasto',
-            'ora_glicemia': '💉 Ora Glicemia',
-            'diff_minuti': '⏱️ Delta (min)',
-            'glicemia': '🩸 Glicemia',
-            'cibo': '🍕 Alimento',
-            'carbo': '🍞 Carbo (g)'
-        })
-        
-        st.dataframe(df_view, use_container_width=True)
-
-        st.divider()
-        st.subheader("📈 Analisi Post-Prandiale")
-        st.write("Questo grafico mostra come varia la glicemia in base ai minuti passati dal pasto.")
-        
-        # Grafico a dispersione: Minuti dal pasto vs Glicemia
-        fig = px.scatter(df, x="diff_minuti", y="glicemia", 
-                         color="glicemia", size="carbo",
-                         hover_name="cibo", 
-                         labels={"diff_minuti": "Minuti dopo il pasto", "glicemia": "Valore Glicemico"},
-                         title="Impatto dei Carboidrati nel tempo")
-        fig.add_hline(y=user[2], line_dash="dash", line_color="red")
+        # Grafico Correlazione IG / Glicemia
+        st.subheader("Impatto dell'Indice Glicemico")
+        fig = px.scatter(df, x="diff_minuti", y="glicemia", color="ig", 
+                         size="carbo", hover_name="cibo",
+                         title="Relazione tra Tempo, IG e Picco Glicemico",
+                         color_continuous_scale="Reds")
         st.plotly_chart(fig, use_container_width=True)
-
-        if st.button("Svuota Diario"):
-            c.execute("DELETE FROM diario")
-            conn.commit()
-            st.rerun()
+        
+        # Tabella Storica
+        st.subheader("📋 Registro Storico")
+        st.dataframe(df, use_container_width=True)
     else:
-        st.info("Nessun dato disponibile.")
+        st.info("Nessun dato salvato. I tuoi inserimenti appariranno qui.")
