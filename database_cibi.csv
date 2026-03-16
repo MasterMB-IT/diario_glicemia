@@ -1,61 +1,208 @@
-cibo,kcal,carbo
-Pasta di semola (cruda),353,71
-Pasta integrale (cruda),324,65
-Riso bianco,330,78
-Riso integrale,341,70
-Pane tipo 0,265,52
-Pane integrale,224,44
-Pane di segale,219,45
-Pizza Margherita,271,33
-Focaccia,310,40
-Patate bollite,85,18
-Gnocchi di patate,150,33
-Polenta (cotta),80,15
-Mela,52,14
-Banana,89,23
-Arancia,47,12
-Pera,57,15
-Fragole,33,8
-Kiwi,61,15
-Uva,69,18
-Pesca,39,9
-Albicocche,48,11
-Pomodori,18,3.9
-Zucchine,17,3.1
-Melanzane,25,6
-Carote,41,9.5
-Insalata lattuga,15,2.9
-Spinaci,23,3.6
-Broccoli,34,7
-Finocchi,31,7
-Pollo (petto),165,0
-Tacchino (fesa),104,0
-Manzo (magro),250,0
-Maiale (bistecca),242,0
-Uova (intero),155,1.1
-Prosciutto crudo,235,0
-Prosciutto cotto,215,1
-Salame,336,1
-Tonno sott'olio (sgocciolato),190,0
-Tonno al naturale,116,0
-Merluzzo,82,0
-Salmone,208,0
-Latte intero,64,4.7
-Latte parzialmente scremato,46,4.8
-Yogurt bianco naturale,61,4.7
-Mozzarella di bufala,288,1.5
-Mozzarella vaccina,253,0.7
-Parmigiano Reggiano,431,0
-Ricotta vaccina,174,3
-Burro,717,0.1
-Olio d'oliva,884,0
-Lenticchie (secche),352,60
-Ceci (secchi),364,60
-Fagioli borlotti (secchi),335,60
-Biscotti frollini,450,70
-Fette biscottate,390,75
-Zucchero bianco,387,100
-Miele,304,82
-Cioccolato fondente (70%),598,34
-Cornetto semplice,373,45
-Gelato crema,218,25
+cibo,kcal,carbo,ig
+Pasta di semola al dente,353,71,45
+Pasta di semola ben cotta,353,71,60
+Pasta integrale,324,65,40
+Pasta all'uovo secca,366,66,55
+Pasta all'uovo fresca,290,52,50
+Riso bianco comune,330,78,70
+Riso Basmati,340,77,50
+Riso integrale,341,70,50
+Riso Venere (Nero),320,64,45
+Pane tipo 0 (Comune),265,52,75
+Pane tipo 1 o 2,250,50,65
+Pane integrale vero,224,44,55
+Pane di segale,219,45,50
+Pane di Genzano/Altamura,260,55,65
+Pane ai cereali,250,48,55
+Pancarré bianco,270,50,75
+Pancarré integrale,255,45,65
+Focaccia all'olio,310,40,70
+Focaccia barese (pomodori/patate),280,45,70
+Pizza Margherita artigianale,271,33,60
+Pizza Marinara,240,40,55
+Pizza Bianca (scrocchiarella),300,50,70
+Gnocchi di patate freschi,150,33,70
+Gnocchi di zucca,120,25,65
+Patate bollite sbucciate,85,18,70
+Patate bollite con buccia,80,17,65
+Patate al forno,120,22,80
+Patate fritte artigianali,290,35,75
+Polenta soda,80,15,70
+Farro bollito,120,25,45
+Orzo perlato bollito,120,28,25
+Cous cous bollito,110,23,65
+Bulgur,121,26,45
+Piadina romagnola classica,340,55,70
+Piadina integrale,310,50,60
+Taralli pugliesi,460,60,65
+Grissini comuni,420,70,70
+Crostini di pane,400,75,70
+Mela (Golden/Stark),52,14,35
+Mela cotta senza zucchero,55,15,45
+Banana poco matura,89,20,45
+Banana matura,95,25,60
+Arancia,47,12,35
+Pera (Abate/Kaiser),57,15,30
+Fragole fresche,33,8,25
+Kiwi,61,15,50
+Uva bianca da tavola,69,18,55
+Pesca noce (Nettarina),39,9,35
+Albicocche,48,11,35
+Ciliegie,63,16,25
+Prugne/Susine fresche,46,11,35
+Melone retato,34,8,65
+Anguria,30,7,75
+Ananas fresco,50,13,60
+Fichi freschi (Settembrini),74,19,50
+Cachi/Loti,70,18,50
+Mandarini/Clementine,53,13,30
+Nespole,47,12,30
+Lamponi/Mirtilli/More,35,8,25
+Pompelmo rosa,42,10,25
+Mango,60,15,50
+Pomodori da insalata,18,4,15
+Pomodori Ciliegino/Datterino,22,5,20
+Zucchine grigliate,17,3,15
+Melanzane a funghetto (poca conta),40,6,20
+Melanzane grigliate,25,6,15
+Carote crude,41,9,35
+Carote bollite,35,8,50
+Lattuga/Indivia/Radicchio,15,3,15
+Spinaci ripassati,23,4,15
+Broccoli al vapore,34,7,15
+Finocchi crudi,31,7,15
+Peperoni arrostiti,31,6,15
+Zucca Delica al forno,45,10,75
+Cipolla rossa/bianca,40,9,15
+Fagiolini lessi,31,7,30
+Asparagi,20,3,15
+Carciofi bolliti,22,3,20
+Carciofi fritti alla giudia,150,10,40
+Cavolfiore,25,4,15
+Funghi Champignon/Porcini,20,1,15
+Petto di pollo,165,0,0
+Coscia di pollo (senza pelle),130,0,0
+Fesa di tacchino,104,0,0
+Bistecca di manzo (Chianina/Piemontese),250,0,0
+Carne macinata di bovino,210,0,0
+Braciola di maiale,242,0,0
+Filetto di maiale,120,0,0
+Coniglio alla cacciatora,150,2,0
+Uovo sodo,155,1,0
+Uovo in camicia,145,1,0
+Frittata semplice (2 uova),190,2,0
+Prosciutto crudo di Parma (sgrassato),230,0,0
+Prosciutto cotto alta qualità,210,1,0
+Bresaola della Valtellina,151,0,0
+Speck dell'Alto Adige,300,0,0
+Mortadella Bologna,310,1,0
+Salame Milano/Ungherese,380,1,0
+Pancetta tesa,450,0,0
+Guanciale (per carbonara),650,0,0
+Tonno al naturale,116,0,0
+Tonno sott'olio (sgocciolato),190,0,0
+Pesce spada ai ferri,120,0,0
+Orata/Spigola al forno,96,0,0
+Salmone selvaggio,180,0,0
+Merluzzo/Nasello vapore,80,0,0
+Calamari alla griglia,80,1,0
+Polpo bollito,70,1,0
+Gamberi/Mazzancolle,85,1,0
+Baccalà ammollato,95,0,0
+Bastoncini di pesce fritti,230,15,60
+Latte intero,64,5,30
+Latte parzialmente scremato,46,5,30
+Latte di riso,60,12,85
+Latte di mandorla (senza zucchero),25,1,25
+Yogurt bianco intero,65,5,35
+Yogurt bianco magro,50,5,35
+Yogurt Greco 0%,60,4,15
+Kefir,50,4,30
+Mozzarella vaccina,250,1,0
+Mozzarella di Bufala Campana,280,1,0
+Parmigiano Reggiano 24 mesi,431,0,0
+Pecorino Romano,390,0,0
+Ricotta vaccina fresca,170,3,30
+Ricotta di pecora,270,4,30
+Gorgonzola dolce,310,1,0
+Stracchino/Crescenza,300,1,0
+Taleggio,300,0,0
+Asiago/Fontina,360,0,0
+Burro di qualità,720,0,0
+Olio Extravergine d'Oliva,884,0,0
+Margarina vegetale,710,0,0
+Olive taggiasche,150,2,15
+Noci sgusciate,650,14,15
+Mandorle pelate,580,20,15
+Pistacchi non salati,560,27,15
+Nocciole,630,16,15
+Arachidi tostate,570,16,15
+Zucchero saccarosio,390,100,100
+Zucchero di canna integrale,380,95,90
+Miele di Acacia,300,82,55
+Miele di Castagno,300,82,65
+Fruttosio,400,100,20
+Stevia (polvere),0,0,0
+Eritritolo,0,0,0
+Marmellata di albicocche (zuccherata),250,60,65
+Marmellata di fragole (70% frutta),150,35,45
+Crema spalmabile alle nocciole,540,58,55
+Burro d'arachidi puro,590,12,15
+Cioccolato fondente 85%,600,20,20
+Cioccolato fondente 70%,590,34,25
+Cioccolato al latte,540,55,45
+Cioccolato bianco,540,60,45
+Cornetto vuoto bar,370,45,70
+Cornetto alla crema,400,50,75
+Cornetto integrale miele,380,48,60
+Fetta biscottata mulino,390,75,70
+Biscotti Oro Saiwa,430,75,70
+Biscotti Macine,480,65,70
+Biscotti integrali (es. Buongrano),440,60,60
+Crostata alla marmellata,350,55,65
+Tiramisù casalingo,300,35,60
+Torta di mele casalinga,250,40,55
+Panettone/Pandoro (fetta 100g),370,55,70
+Colomba pasquale,350,58,70
+Gelato artigianale crema,220,25,60
+Gelato artigianale frutta (sorbetto),130,30,50
+Granita siciliana limone,100,25,60
+Pasticcino mignon crema,350,45,70
+Bignè al cioccolato,320,38,65
+Vino rosso (125ml),85,2,0
+Vino bianco (125ml),82,1,0
+Prosecco/Spumante dry,90,3,0
+Birra bionda (33cl),140,10,70
+Birra analcolica,70,15,60
+Caffè espresso amaro,2,0,0
+Caffè con 1 cucchiaino zucchero,22,5,100
+Tè amaro,1,0,0
+Succo d'arancia 100%,45,10,50
+Spremuta d'arancia fresca,35,8,45
+Cola classica (33cl),140,35,70
+Cola Zero/Light,1,0,0
+Tè freddo pesca/limone,35,9,60
+Ceci lessati (barattolo),120,18,35
+Lenticchie lesse (barattolo),90,15,30
+Fagioli Borlotti bolliti,100,16,35
+Fagioli Cannellini bolliti,95,15,35
+Fave fresche bollite,42,8,40
+Piselli finissimi surgelati,80,12,50
+Soia gialla bollita,140,10,15
+Lupini in salamoia,116,10,15
+Minestrone di verdure senza legumi,25,4,20
+Minestrone con legumi e pasta,80,12,45
+Passato di verdure (solo ortaggi),30,5,25
+Pasta e fagioli,120,18,40
+Pasta e ceci,130,20,40
+Riso e piselli (Risi e bisi),110,18,50
+Besciamella,150,12,60
+Pesto alla genovese,500,5,15
+Ragù alla bolognese casalingo,150,3,15
+Salsa di pomodoro semplice,40,6,15
+Maionese,680,1,15
+Senape,60,5,30
+Ketchup,100,25,55
+Aceto di vino,20,1,0
+Aceto Balsamico (comune),100,25,60
+Aceto Balsamico Tradizionale,160,40,50
